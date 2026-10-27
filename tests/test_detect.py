@@ -143,3 +143,31 @@ def test_a_normal_sized_block_is_still_scanned():
           p("2", "V1", "Acme", "inv 12", 1000.0, "2026-02-05")]
     assert d.oversized(ps) == []
     assert len(d.candidates(ps)) == 1
+
+
+def test_the_budget_counts_comparisons_not_candidates(monkeypatch):
+    """2,000 payments that match no rule are still ~2m comparisons. Counting
+    candidates would leave the cap unarmed on exactly that input."""
+    import app.detect as d
+    monkeypatch.setattr(d, "MAX_PAIRS", 10)
+    # Same amount so they share a block, sequential invoice numbers so no rule fires.
+    ps = [p(str(i), "V1", "Acme", f"QG-{20000+i}", 1000.0, "2026-01-05") for i in range(60)]
+    found, truncated = d.scan(ps)
+    assert found == []
+    assert truncated is True, "cap must fire on comparisons even with zero candidates"
+
+
+def test_a_truncated_scan_says_so_rather_than_looking_complete():
+    import app.detect as d
+    from app.pipeline import run
+    ps = [p(str(i), "V1", "Acme", f"QG-{20000+i}", 1000.0, "2026-01-05") for i in range(5)]
+    s = run(ps)["summary"]
+    assert s["truncated"] is False and s["complete"] is True
+
+
+def test_an_oversized_block_makes_the_run_incomplete():
+    import app.detect as d
+    from app.pipeline import run
+    ps = [p(str(i), "V1", "Acme", f"INV-{i}", 1000.0, "2026-01-05") for i in range(d.MAX_BLOCK + 5)]
+    s = run(ps)["summary"]
+    assert s["skipped_blocks"] and s["complete"] is False

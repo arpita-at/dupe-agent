@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from .detect import Candidate, Payment, candidates, oversized
+from .detect import Candidate, Payment, oversized, scan
 from .judge import claude_judge, in_band, wants_model
 
 MAX_JUDGE = int(os.environ.get("DUPE_MAX_JUDGE", 50))
@@ -31,7 +31,7 @@ def tray(score: float, verdict: str | None) -> str:
 
 def run(payments: list[Payment]) -> dict:
     skipped = oversized(payments)
-    cands = candidates(payments)
+    cands, truncated = scan(payments)
     rows, sent = [], 0
     for c in cands:
         allow = wants_model(c.score) and sent < MAX_JUDGE
@@ -76,6 +76,10 @@ def run(payments: list[Payment]) -> dict:
             # vendor or date before the number above means anything.
             "skipped_blocks": [{"currency": c, "amount_minor": a, "payments": n}
                                for c, a, n in skipped],
+            # True means the scan stopped early. Every number above is a floor,
+            # not a total, and a zero in this report is not a real zero.
+            "truncated": truncated,
+            "complete": not truncated and not skipped,
         },
         "by_pattern": by_pattern,
         "pairs": rows,

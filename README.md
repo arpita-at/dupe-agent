@@ -88,7 +88,7 @@ The two commonest false positives in every duplicate-payment tool, both tested:
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8000     # then open http://127.0.0.1:8000
-pytest -q                                      # 48 passed
+pytest -q                                      # 51 passed
 ```
 
 Optional, for the innocent-explanation pass: `export ANTHROPIC_API_KEY=sk-ant-...`
@@ -112,6 +112,8 @@ Leave `po` empty for a non-PO invoice. Amounts compare in minor units, so float 
 **Why block on amount?** Every pattern requires an exact amount match, so two payments in different amount blocks can never be a candidate. That is what makes a full year of AP scannable instead of O(n²). There is a test asserting blocking never hides a real candidate, and it must fail if a pattern ever stops requiring the amount.
 
 **What if 50,000 payments share one amount?** That block would be 1.2 billion pairs. Blocks over `DUPE_MAX_BLOCK` (2,000) are skipped and **reported** in `summary.skipped_blocks`, never silently dropped. A block that size is itself a finding, and hiding it would understate exposure. Split it by vendor or date and rerun.
+
+**How do I know the scan was complete?** `summary.complete`. The pair budget (`DUPE_MAX_PAIRS`) counts **comparisons made**, not candidates found, because 2,000 payments that match no rule are still two million comparisons and a candidate-based cap would never fire on them. If the scan stops early, `summary.truncated` is true and every number in the report is a floor rather than a total. A partial scan presented as a complete one is worse than no scan, because the zero you read is not a real zero.
 
 **How do I use the output?** Three trays. `claim` is strong enough to raise with the supplier. `review` is a human read. `dismissed` is where the model found an innocent explanation. Work the claim tray by exposure, largest first.
 

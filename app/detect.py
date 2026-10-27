@@ -168,19 +168,40 @@ def oversized(payments: list[Payment]) -> list[tuple[str, int, int]]:
             for b in blocks(payments) if len(b) > MAX_BLOCK]
 
 
-def candidates(payments: list[Payment]) -> list[Candidate]:
-    """Every scored pair, strongest pattern per pair, highest score first."""
+def scan(payments: list[Payment]) -> tuple[list[Candidate], bool]:
+    """Every scored pair, strongest pattern per pair, and whether the scan was
+    cut short.
+
+    The budget counts **comparisons made**, not candidates found. Counting
+    candidates would never stop a ledger of 2,000 near-identical payments that
+    happen to match no rule: a couple of million comparisons, an empty result,
+    and a cap that never fires.
+
+    Truncation is returned, not swallowed. A partial scan reported as a complete
+    one is worse than no scan, because the zero you read is not a real zero.
+    """
     out: list[Candidate] = []
+    seen = 0
+    truncated = False
     for block in blocks(payments):
         if len(block) > MAX_BLOCK:
             continue        # reported by oversized(), never silently merged in
-        if len(out) >= MAX_PAIRS:
-            break
         for a, b in combinations(sorted(block, key=lambda p: p.paid_on), 2):
+            if seen >= MAX_PAIRS:
+                truncated = True
+                break
+            seen += 1
             for name, rule in RULES:
                 hit = rule(a, b)
                 if hit:
                     score, reason = hit
                     out.append(Candidate(a, b, name, score, reason))
                     break
-    return sorted(out, key=lambda c: (-c.score, -c.exposure))
+        if truncated:
+            break
+    return sorted(out, key=lambda c: (-c.score, -c.exposure)), truncated
+
+
+def candidates(payments: list[Payment]) -> list[Candidate]:
+    """Candidates only. Use scan() where the truncation flag matters."""
+    return scan(payments)[0]
