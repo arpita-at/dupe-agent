@@ -7,6 +7,7 @@ positive costs a vendor relationship.
 """
 from __future__ import annotations
 
+import os
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
@@ -152,10 +153,29 @@ def blocks(payments: list[Payment]) -> list[list[Payment]]:
     return [v for v in buckets.values() if len(v) > 1]
 
 
+#: A block is every payment sharing one currency and amount. Normally tiny. A
+#: ledger with 50,000 payments of exactly 1,000.00 would produce 1.2 billion
+#: pairs from one block, so both the block and the total pair count are capped.
+MAX_BLOCK = int(os.environ.get("DUPE_MAX_BLOCK", 2_000))
+MAX_PAIRS = int(os.environ.get("DUPE_MAX_PAIRS", 500_000))
+
+
+def oversized(payments: list[Payment]) -> list[tuple[str, int, int]]:
+    """Blocks too large to scan, as (currency, minor units, size). Reported rather
+    than silently truncated: a block of 50,000 identical amounts is itself a
+    finding, and quietly dropping it would hide exposure."""
+    return [(b[0].currency, amount_key(b[0].amount), len(b))
+            for b in blocks(payments) if len(b) > MAX_BLOCK]
+
+
 def candidates(payments: list[Payment]) -> list[Candidate]:
     """Every scored pair, strongest pattern per pair, highest score first."""
     out: list[Candidate] = []
     for block in blocks(payments):
+        if len(block) > MAX_BLOCK:
+            continue        # reported by oversized(), never silently merged in
+        if len(out) >= MAX_PAIRS:
+            break
         for a, b in combinations(sorted(block, key=lambda p: p.paid_on), 2):
             for name, rule in RULES:
                 hit = rule(a, b)

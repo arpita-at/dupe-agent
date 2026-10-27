@@ -125,3 +125,21 @@ def test_an_identical_pair_across_two_entities_is_not_called_exact():
     c = only([p("1", "V1", "Merck", "MK-55820", 744000.0, "2026-06-14", cc="IN01"),
               p("2", "V1", "Merck", "MK-55820", 744000.0, "2026-08-01", cc="SG01")])
     assert c.pattern == "cross_entity"
+
+
+def test_one_huge_block_is_reported_not_scanned():
+    """50,000 payments of the same amount would be 1.2 billion pairs. The block is
+    skipped and reported, never silently dropped: a block that size is itself a
+    finding and hiding it would understate exposure."""
+    import app.detect as d
+    ps = [p(str(i), "V1", "Acme", f"INV-{i}", 1000.0, "2026-01-05") for i in range(d.MAX_BLOCK + 5)]
+    assert d.oversized(ps) == [("INR", 100000, d.MAX_BLOCK + 5)]
+    assert d.candidates(ps) == []
+
+
+def test_a_normal_sized_block_is_still_scanned():
+    import app.detect as d
+    ps = [p("1", "V1", "Acme", "INV-0012", 1000.0, "2026-01-05", po="PO1"),
+          p("2", "V1", "Acme", "inv 12", 1000.0, "2026-02-05")]
+    assert d.oversized(ps) == []
+    assert len(d.candidates(ps)) == 1

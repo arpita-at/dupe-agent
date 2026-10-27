@@ -3,16 +3,26 @@ from __future__ import annotations
 
 import os
 
-from .detect import Candidate, Payment, candidates
+from .detect import Candidate, Payment, candidates, oversized
 from .judge import claude_judge, in_band, wants_model
 
 MAX_JUDGE = int(os.environ.get("DUPE_MAX_JUDGE", 50))
 
-#: Only a person files a claim. These are the three trays they work.
+#: Only a person files a claim, and only a person dismisses one.
 def tray(score: float, verdict: str | None) -> str:
+    """The model can move a pair DOWN out of the claim tray, into review. It can
+    never move one to `dismissed`, and it can never promote one to `claim`.
+
+    Dismissal is withheld on purpose. `vendor_name` and `invoice_no` are chosen
+    by the supplier and are fed to the model as text. A supplier who writes
+    instructions into their own vendor master name could otherwise talk the model
+    into dismissing their own duplicate payments. Routing to `review` keeps the
+    model's explanation, which is the useful part, and keeps the decision with a
+    person, which is the part that has to stay.
+    """
     if verdict == "likely_legitimate":
-        return "dismissed"
-    if score >= 0.90 or verdict == "likely_duplicate":
+        return "review"
+    if score >= 0.90:
         return "claim"
     if in_band(score):
         return "review"
@@ -20,6 +30,7 @@ def tray(score: float, verdict: str | None) -> str:
 
 
 def run(payments: list[Payment]) -> dict:
+    skipped = oversized(payments)
     cands = candidates(payments)
     rows, sent = [], 0
     for c in cands:
@@ -61,6 +72,10 @@ def run(payments: list[Payment]) -> dict:
             "claim_tray": round(claimable, 2),
             "claim_as_share_of_spend": round(claimable / spend, 5) if spend else 0.0,
             "sent_to_model": sent,
+            # Blocks too large to scan. Not a clean run: these need splitting by
+            # vendor or date before the number above means anything.
+            "skipped_blocks": [{"currency": c, "amount_minor": a, "payments": n}
+                               for c, a, n in skipped],
         },
         "by_pattern": by_pattern,
         "pairs": rows,
