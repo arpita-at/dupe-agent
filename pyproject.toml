@@ -1,0 +1,9 @@
+[project]
+name = "dupe-agent"
+version = "0.1.0"
+description = "Duplicate supplier payment detection. Deterministic near-duplicate patterns an ERP check misses; a model only argues against the flag."
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

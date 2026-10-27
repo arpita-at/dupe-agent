@@ -1,0 +1,46 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>dupe-agent</title>
+<style>
+ :root{--ink:#0F172A;--mut:#64748B;--line:#E2E8F0;--blue:#2563EB;--bg:#fff;--warn:#EA580C;--ok:#16A34A}
+ @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--ink:#E2E8F0;--mut:#94A3B8;--line:#1E293B;--bg:#0B1220}}
+ *{box-sizing:border-box;margin:0}
+ body{background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,"SF Pro Text",Helvetica,sans-serif;padding:48px 16px}
+ main{max-width:1000px;margin:0 auto}
+ h1{font-size:34px;letter-spacing:-.02em} h2{font-size:17px;margin:30px 0 8px}
+ p.lede{color:var(--mut);margin:10px 0 24px;max-width:66ch}
+ button{background:var(--blue);color:#fff;border:0;border-radius:10px;padding:11px 20px;font-size:16px;font-weight:600;cursor:pointer}
+ table{border-collapse:collapse;width:100%;margin-top:10px;font-size:14px}
+ th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left}
+ th{color:var(--mut);font-weight:600;font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+ .sum{display:flex;gap:28px;flex-wrap:wrap;margin-top:22px;color:var(--mut);font-size:14px}
+ .sum b{display:block;color:var(--ink);font-size:22px;font-variant-numeric:tabular-nums}
+ .sum .hot b{color:var(--warn)}
+ .tag{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:1px solid currentColor;border-radius:999px;padding:2px 7px;white-space:nowrap}
+ .claim{color:var(--warn)} .review{color:var(--blue)} .dismissed,.watch{color:var(--mut)}
+</style></head><body><main>
+<h1>dupe-agent</h1>
+<p class="lede">Duplicate supplier payment detection. Six patterns, each one a duplicate an ERP's own check lets through. Rules find the pairs and a model is asked only to argue against the uncertain ones. Nothing here recovers anything: the output is a claim file a person works. Sample data is synthetic.</p>
+<button id="go">Run the demo</button><div id="out"></div>
+<script>
+const m=n=>n.toLocaleString(undefined,{maximumFractionDigits:0});
+document.getElementById('go').onclick=async()=>{
+ const out=document.getElementById('out'); out.innerHTML='<p class="lede">Scanning…</p>';
+ const d=await (await fetch('/api/demo',{method:'POST'})).json(); const s=d.summary;
+ out.innerHTML=`<div class="sum">
+   <div>Payments<b>${s.payments}</b></div>
+   <div>Candidate pairs<b>${s.pairs}</b></div>
+   <div>Your ERP would catch<b>${m(s.exposure_erp_would_catch)}</b></div>
+   <div class="hot">Beyond the ERP<b>${m(s.exposure_beyond_erp)}</b></div>
+   <div class="hot">Share beyond<b>${(s.beyond_erp_share*100).toFixed(1)}%</b></div>
+   <div>Claim tray<b>${m(s.claim_tray)}</b></div></div>
+  <h2>By pattern</h2><table><thead><tr><th>Pattern</th><th class="num">Pairs</th><th class="num">Exposure</th></tr></thead><tbody>`+
+  Object.entries(d.by_pattern).sort((a,b)=>b[1].exposure-a[1].exposure).map(([k,v])=>
+   `<tr><td>${k.replace(/_/g,' ')}</td><td class="num">${v.pairs}</td><td class="num">${m(v.exposure)}</td></tr>`).join('')+
+  `</tbody></table><h2>Pairs</h2><table><thead><tr><th>Tray</th><th>Supplier</th><th>Pattern</th><th class="num">Exposure</th><th>Why it was flagged</th></tr></thead><tbody>`+
+  d.pairs.map(r=>`<tr><td><span class="tag ${r.tray}">${r.tray}</span></td><td>${r.vendor}</td>
+    <td>${r.pattern.replace(/_/g,' ')}</td><td class="num">${r.currency} ${m(r.exposure)}</td>
+    <td>${r.reason}${r.innocent_explanation?'<br><em>Possible innocent reason: '+r.innocent_explanation+'</em>':''}</td></tr>`).join('')+
+  `</tbody></table>`;
+};
+</script></main></body></html>
